@@ -16,7 +16,7 @@ CREATE TABLE clientes (
 CREATE TABLE fornecedores (
     id_fornecedor serial PRIMARY KEY,
     nome_empresa VARCHAR(100) NOT NULL,
-    contato VARCHAR(100),
+    contato VARCHAR(255),
     email VARCHAR(100) UNIQUE,
     pais VARCHAR(50) DEFAULT 'China',
     ativo BOOLEAN DEFAULT TRUE
@@ -25,24 +25,25 @@ CREATE TABLE fornecedores (
 CREATE TABLE produtos (
     id_produto serial PRIMARY KEY,
     nome_produto VARCHAR(100) NOT NULL,
-    categoria ENUM('2x2', '3x3', '4x4', '5x5', 'Megaminx', 'Pyraminx', 'Outros'),
+    categoria varchar(255),
     preco DECIMAL(10,2) CHECK (preco > 0),
     estoque INT DEFAULT 0,
-    id_fornecedor REFERENCES fornecedores(id_fornecedor)
+    id_fornecedor int,
+    foreign key (id_fornecedor) REFERENCES fornecedores(id_fornecedor)
 );
 
 CREATE TABLE pedidos (
     id_pedido serial PRIMARY KEY,
     id_cliente INT NOT NULL REFERENCES clientes(id_cliente),
     data_pedido timestamp,
-    status ENUM('pendente', 'enviado', 'concluido', 'cancelado') DEFAULT 'pendente',
+    status varchar(255) DEFAULT 'pendente',
     valor_total DECIMAL(10,2) DEFAULT 0 CHECK (valor_total >= 0)
 );
 
 CREATE TABLE itens_pedido (
     id_pedido INT,
     id_produto INT,
-    quantidade INT NOT NULL CHECK (quantidade > 0),
+    quantidade varchar(255) not null,
     preco_unitario DECIMAL(10,2) NOT NULL,
     PRIMARY KEY (id_pedido, id_produto),
     FOREIGN KEY (id_pedido) REFERENCES pedidos(id_pedido),
@@ -52,10 +53,10 @@ CREATE TABLE itens_pedido (
 CREATE TABLE pagamentos (
     id_pagamento serial PRIMARY KEY,
     id_pedido INT NOT NULL REFERENCES pedidos(id_pedido),
-    metodo ENUM('cartao', 'pix', 'boleto') NOT NULL,
+    metodo varchar(255) NOT NULL,
     valor_pago DECIMAL(10,2) NOT NULL,
     data_pagamento TIMESTAMP,
-    status ENUM('pago', 'pendente', 'falhou') DEFAULT 'pendente',
+    status varchar(255) DEFAULT 'pendente'
 );
 
 --Views
@@ -161,4 +162,96 @@ INSERT INTO pagamentos (id_pedido, metodo, valor_pago, status) VALUES
 --Consultando as views
 SELECT * FROM vw_pedidos_detalhados;
 SELECT * FROM vw_produtos_fornecedores;
+
+--Consulta com Like
+
+select 
+	*
+from
+	produtos pr
+where pr.nome_produto like '%2x2%'
+
+--Adicionando Explain
+
+explain select * from produtos pr where pr.nome_produto like '%2x2%'
+
+--Fazendo a consulta com index
+
+create index idx_tagproduto
+on produtos(nome_produto, preco)
+
+--Criando usuário e dando acesso total
+
+create user mathias with password 'bazinga'; --Cria o usuário
+grant connect on database db_revenda_mathias to mathias; --Concede acesso ao banco
+grant all privileges on all tables in schema public to mathias; --Concende todos os privilégios para todas as tabelas
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO mathias; --Concete todos os privilégios para todas as tabelas que serão criadas no futuro
+
+--Criando usuário colega e permissão de select
+create user nicolas with password '23571113';
+GRANT SELECT ON TABLE produtos TO nicolas;
+
+--CONSULTAS COM INNERJOIN
+SELECT pedidos.id_pedido, clientes.nome, produtos.nome_produto
+FROM pedidos
+INNER JOIN clientes ON pedidos.id_cliente = clientes.id_cliente
+INNER JOIN itens_pedido ON pedidos.id_pedido = itens_pedido.id_pedido
+INNER JOIN produtos ON itens_pedido.id_produto = produtos.id_produto;
+
+--pedidos de cada cliente
+SELECT clientes.nome, pedidos.id_pedido, pedidos.data_pedido
+FROM clientes
+INNER JOIN pedidos ON clientes.id_cliente = pedidos.id_cliente;
+
+--produtos vendidos por fornecedor
+SELECT fornecedores.nome_empresa, COUNT(produtos.id_produto) AS total_produtos
+FROM fornecedores
+INNER JOIN produtos ON fornecedores.id_fornecedor = produtos.id_fornecedor
+GROUP BY fornecedores.nome_empresa;
+
+--pagamentos e pedidos
+SELECT pagamentos.id_pagamento, pedidos.id_pedido, pedidos.data_pedido
+FROM pagamentos
+INNER JOIN pedidos ON pagamentos.id_pedido = pedidos.id_pedido;
+
+--CONSULTAS COM RIGHTJOIN
+SELECT pedidos.id_pedido, clientes.nome, produtos.nome_produto
+FROM pedidos
+RIGHT JOIN clientes ON pedidos.id_cliente = clientes.id_cliente
+RIGHT JOIN itens_pedido ON pedidos.id_pedido = itens_pedido.id_pedido
+RIGHT JOIN produtos ON itens_pedido.id_produto = produtos.id_produto;
+
+SELECT fornecedores.nome_empresa, COUNT(produtos.id_produto) AS total_produtos
+FROM fornecedores
+RIGHT JOIN produtos ON fornecedores.id_fornecedor = produtos.id_fornecedor
+GROUP BY fornecedores.nome_empresa;
+
+SELECT pagamentos.id_pagamento, pedidos.id_pedido, pedidos.data_pedido
+FROM pagamentos
+RIGHT JOIN pedidos ON pagamentos.id_pedido = pedidos.id_pedido;
+
+SELECT clientes.nome, pedidos.id_pedido, pedidos.data_pedido
+FROM clientes
+RIGHT JOIN pedidos ON clientes.id_cliente = pedidos.id_cliente;
+
+
+--CONSULTAS COM LEFTJOIN
+SELECT pedidos.id_pedido, clientes.nome, produtos.nome_produto
+FROM pedidos
+LEFT JOIN clientes ON pedidos.id_cliente = clientes.id_cliente
+LEFT JOIN itens_pedido ON pedidos.id_pedido = itens_pedido.id_pedido
+LEFT JOIN produtos ON itens_pedido.id_produto = produtos.id_produto;
+
+SELECT fornecedores.nome_empresa, COUNT(produtos.id_produto) AS total_produtos
+FROM fornecedores
+LEFT JOIN produtos ON fornecedores.id_fornecedor = produtos.id_fornecedor
+GROUP BY fornecedores.nome_empresa;
+
+SELECT pagamentos.id_pagamento, pedidos.id_pedido, pedidos.data_pedido
+FROM pagamentos
+LEFT JOIN pedidos ON pagamentos.id_pedido = pedidos.id_pedido;
+
+SELECT clientes.nome, pedidos.id_pedido, pedidos.data_pedido
+FROM clientes
+LEFT JOIN pedidos ON clientes.id_cliente = pedidos.id_cliente;
 
